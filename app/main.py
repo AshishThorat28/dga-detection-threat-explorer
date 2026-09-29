@@ -4,9 +4,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
-from .schemas import BatchRequest, DomainRequest, GenerateRequest
+from .schemas import AdversarialRequest, BatchRequest, DomainRequest, GenerateRequest, SimulationRequest, UnseenExperimentRequest
 from . import services
+from src.adversarial import mutate_domain
 from src.dga_internals import generate
+from src.experiments import run_unseen
+from src.simulation import run_simulation
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,7 +41,52 @@ def api_batch(request: BatchRequest):
 
 @app.post("/api/explain")
 def api_explain(request: DomainRequest):
-    return {"domain": request.domain, "contributions": services.load_services().explain(request.domain)}
+    try:
+        prediction = services.load_services().predict(request.domain)
+        return {"domain": prediction.domain, "verdict": prediction.verdict, "probability": prediction.probability, **prediction.explanation}
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+
+@app.post("/api/experiments/unseen")
+def api_unseen_experiment(request: UnseenExperimentRequest):
+    try:
+        return run_unseen(request.per_family, request.train_families, request.unseen_families)
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+
+@app.post("/api/adversarial")
+def api_adversarial(request: AdversarialRequest):
+    engine = services.load_services()
+    try:
+        original = engine.predict(request.domain, include_explanation=False)
+        modified_domain = mutate_domain(
+            original.domain, request.length, request.randomness, request.digit_ratio,
+            request.vowel_ratio, request.meaningful_word, request.seed,
+        )
+        modified = engine.predict(modified_domain, include_explanation=False)
+        feature_changes = {
+            name: round(modified.features[name] - original.features[name], 5)
+            for name in original.features
+        }
+        return {
+            "original": original.__dict__,
+            "modified_domain": modified_domain,
+            "modified": modified.__dict__,
+            "confidence_change": round(modified.probability - original.probability, 5),
+            "feature_changes": feature_changes,
+        }
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+
+@app.post("/api/simulate")
+def api_simulate(request: SimulationRequest):
+    try:
+        return run_simulation(
+            services.load_services(), request.algorithm, request.seed,
+            request.date, request.count, request.benign_count,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
 
 @app.post("/api/generate")
 def api_generate(request: GenerateRequest):

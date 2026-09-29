@@ -7,7 +7,11 @@ A reproducible, local-first research and teaching application for detecting doma
 ## Capabilities
 
 - Train and evaluate a deterministic baseline using a seeded synthetic dataset.
-- Score one domain or a batch, inspect lexical features, and view character-occlusion explanations.
+- Score one domain or a batch, inspect lexical features, and view additive logistic-regression feature contributions alongside character n-grams.
+- Predict a supported DGA family with a separate multiclass family classifier after the binary DGA decision.
+- Run family-disjoint experiments that keep each unseen family out of training and include held-out benign controls.
+- Mutate domain length, randomness, digit/vowel ratios, and meaningful-word content, then compare original and modified scores.
+- Simulate locally generated DGA traffic against benign controls and report alerts, false positives, false negatives, detection rate, and runtime.
 - Generate example domains for supported DGA algorithms without making network requests or registering domains.
 - Inspect robustness variants and export the current in-memory scan history as CSV or JSON.
 - Explore the service from a no-build HTML, CSS, and JavaScript interface.
@@ -71,7 +75,9 @@ The current lightweight inference engine exposes five model names for comparison
 
 Optional Keras model builders are provided in `src/models_deep.py`; they are not wired into the default training or serving path. Install their additional dependency with `python -m pip install -r requirements-optional-deep.txt` if you are working on those builders.
 
-The synthetic benchmark is deliberately easy to separate and does not represent real-world prevalence, distribution shift, unseen-family generalization, calibrated probabilities, or adversarial robustness. A credible operational evaluation requires independently sourced and licensed benign and malicious data, family-disjoint evaluation, leakage controls, calibration, and monitoring. Do not interpret a displayed score as proof that a domain is safe or malicious.
+The prediction explanation is an exact additive decomposition of the LR model's logit across lexical features and character n-grams. The displayed DGA probability is the mean of the model-slot probabilities, so the LR explanation does not decompose the ensemble output. Family scores are from a separate multiclass LR model and are not calibrated confidence estimates.
+
+The synthetic benchmark is deliberately easy to separate and does not represent real-world prevalence, distribution shift, calibrated probabilities, or adversarial robustness. The family-disjoint experiment removes the selected DGA family from fitting and evaluates it alongside a small held-out benign control set; because the benign vocabulary is limited, the resulting metrics are experimental demonstrations rather than strong generalization evidence. The attack/defense simulation knows its labels because it generates both classes locally. A credible operational evaluation requires independently sourced and licensed benign and malicious data, substantially broader benign controls, family-disjoint evaluation, leakage controls, calibration, and monitoring. Do not interpret a displayed score as proof that a domain is safe or malicious.
 
 ## API Reference
 
@@ -82,14 +88,17 @@ All endpoints are served from the same local FastAPI process.
 | `GET` | `/api/health` | Service and dataset status |
 | `POST` | `/api/predict` | Analyze one domain: `{"domain":"example.com"}` |
 | `POST` | `/api/predict/batch` | Analyze a list: `{"domains":["example.com"]}` |
-| `POST` | `/api/explain` | Character-occlusion explanation for one domain |
+| `POST` | `/api/explain` | LR logit contributions for lexical features and character n-grams |
 | `POST` | `/api/generate` | Generate and score domains for a supported algorithm |
 | `POST` | `/api/robustness` | Score simple string variants of a domain |
+| `POST` | `/api/experiments/unseen` | Run family-disjoint evaluation; accepts optional `train_families`, `unseen_families`, and `per_family` |
+| `POST` | `/api/adversarial` | Mutate a domain under bounded length/randomness/digit/vowel/word controls and compare scores |
+| `POST` | `/api/simulate` | Run a local DGA-versus-benign detection simulation |
 | `GET` | `/api/points` | Return generated 3D teaching-projection points, or an empty list if absent |
 | `GET` | `/api/results` | Return the current result summary |
 | `GET` | `/api/export?format=csv` | Export in-memory scan history as CSV; `format=json` is also supported |
 
-Request validation and error responses are provided by FastAPI/Pydantic. Batch requests are capped at 500 domains; generated batches are capped at 500. See `/docs` for the complete request and response schemas.
+Request validation and error responses are provided by FastAPI/Pydantic. Batch requests are capped at 500 domains; generated batches at 500; simulations at 200 domains per class; adversarial labels at 63 characters; and experiment datasets at 1,000 examples per family. See `/docs` for complete request and response schemas.
 
 ## Repository Layout
 
@@ -117,7 +126,9 @@ requirements-optional-deep.txt  Optional TensorFlow dependency set
 
 - Synthetic training data and limited benign coverage are not substitutes for representative labeled telemetry.
 - Model probabilities are not calibrated confidence estimates.
-- Family hints, lexical explanations, and 3D coordinates are heuristic teaching aids, not causal explanations or semantic embeddings.
+- LR feature attributions explain that model's logit, not the ensemble decision, and are not causal explanations.
+- Family classifier scores and adversarial deltas are uncalibrated model outputs; the synthetic simulation is not live-traffic evidence.
+- 3D coordinates are a deterministic character projection, not a semantic embedding.
 - Optional Keras builders are not integrated into the default pipeline; the displayed `LSTM` and `CNN` slots are lightweight sklearn models.
 - No unseen-family, production, or real-world performance claim is made.
 

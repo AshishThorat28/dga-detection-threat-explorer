@@ -1,14 +1,77 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DGA Threat Explorer</title><link rel="stylesheet" href="/static/css/style.css"></head>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>DGA Threat Explorer</title>
+	<link rel="stylesheet" href="/static/css/style.css">
+</head>
 <body>
-<header><div class="brand"><span class="mark">D</span><div><strong>DGA / THREAT EXPLORER</strong><small>Cryptography & Network Security lab</small></div></div><nav role="tablist"><button class="tab active" data-tab="detect">Detect</button><button class="tab" data-tab="batch">Batch Scan</button><button class="tab" data-tab="explorer">3D Explorer</button><button class="tab" data-tab="lab">DGA Lab</button><button class="tab" data-tab="results">Results</button></nav><button id="theme" class="icon-button" aria-label="Toggle theme">☼</button></header>
-<main>
-<section id="detect" class="panel active"><div class="eyebrow">01 / CLASSIFY A DOMAIN</div><h1>Does this domain look algorithmic?</h1><p class="lede">A compact, explainable detector for studying how DGAs evade static blocklists.</p><div class="input-row"><input id="domain" aria-label="Domain to analyze" placeholder="enter a domain, e.g. github.com" autocomplete="off"><button id="analyze" class="primary">Analyze <span>↵</span></button></div><div class="chips"><button data-example="github.com">github.com</button><button data-example="qzv8xk2m1p9r.com">qzv8xk2m1p9r.com</button><button data-example="bluecloud47.org">bluecloud47.org</button><button data-example="a.co">a.co</button></div><div id="status" class="status">Ready. Models loaded locally.</div><div id="result" class="result-grid hidden"><article class="verdict"><div class="label">VERDICT</div><div id="verdict" class="verdict-value">-</div><div id="risk" class="risk">-</div><div class="gauge"><div id="gauge-fill"></div></div><div id="probability">0% calibrated probability</div></article><article><div class="label">MODEL CONSENSUS</div><div id="votes" class="votes"></div><div class="label why-label">WHY?</div><div id="features" class="features"></div></article></div><div id="history" class="history"></div></section>
-<section id="batch" class="panel"><div class="eyebrow">02 / BATCH SCAN</div><h2>Scan a list</h2><textarea id="batch-input" placeholder="one domain per line"></textarea><button id="batch-run" class="primary">Scan list</button><div id="batch-summary"></div><div id="batch-table"></div></section>
-<section id="explorer" class="panel"><div class="eyebrow">03 / EMBEDDING SPACE</div><h2>3D Threat Explorer</h2><p class="lede">The projection is a teaching aid: nearby points share character patterns, not necessarily infrastructure.</p><div id="scene" class="scene"><div class="scene-note">3D points load from the trained results artifact.</div></div></section>
-<section id="lab" class="panel"><div class="eyebrow">04 / CNS INTERNALS</div><h2>Rebuild the same list</h2><div class="controls"><label>Algorithm<select id="algorithm"><option value="lcg">LCG PRNG</option><option value="md5">Date-seeded MD5</option><option value="dictionary">Dictionary concatenation</option></select></label><label>Seed<input id="seed" type="number" value="42"></label><label>Date<input id="date" value="2026-01-01"></label><label>Count<input id="count" type="number" value="12" min="1" max="100"></label></div><button id="generate" class="primary">Generate domains</button><div id="formula" class="formula"></div><div id="generated" class="generated"></div></section>
-<section id="results" class="panel"><div class="eyebrow">05 / EVIDENCE</div><h2>Run-backed results</h2><div id="results-content" class="results-content"><p>Loading result artifacts...</p></div></section>
-</main><footer>Educational tool; not a production security control. <span id="health">API status: checking</span></footer>
-<script type="module" src="/static/js/main.js"></script>
-</body></html>
+	<header>
+		<div class="brand"><span class="mark">D</span><div><strong>DGA / THREAT EXPLORER</strong><small>Cryptography & Network Security lab</small></div></div>
+		<nav role="tablist" aria-label="Project tools">
+			<button class="tab active" data-tab="detect" role="tab">Detect</button>
+			<button class="tab" data-tab="batch" role="tab">Batch</button>
+			<button class="tab" data-tab="explorer" role="tab">3D Explorer</button>
+			<button class="tab" data-tab="lab" role="tab">DGA Lab</button>
+			<button class="tab" data-tab="adversarial" role="tab">Adversarial</button>
+			<button class="tab" data-tab="simulation" role="tab">Simulation</button>
+			<button class="tab" data-tab="results" role="tab">Results</button>
+		</nav>
+		<button id="theme" class="icon-button" aria-label="Toggle theme">☼</button>
+	</header>
+	<main>
+		<section id="detect" class="panel active" role="tabpanel">
+			<div class="eyebrow">01 / CLASSIFY A DOMAIN</div>
+			<h1>Does this domain look algorithmic?</h1>
+			<p class="lede">A domain-string detector with model evidence and supported-family scores.</p>
+			<div class="input-row"><input id="domain" aria-label="Domain to analyze" placeholder="enter a domain, e.g. github.com" autocomplete="off"><button id="analyze" class="primary">Analyze <span>↵</span></button></div>
+			<div class="chips"><button data-example="github.com">github.com</button><button data-example="qzv8xk2m1p9r.com">qzv8xk2m1p9r.com</button><button data-example="bluecloud47.org">bluecloud47.org</button><button data-example="a.co">a.co</button></div>
+			<div id="status" class="status">Ready. Models loaded locally.</div>
+			<div id="result" class="result-grid hidden">
+				<article class="verdict"><div class="label">VERDICT</div><div id="verdict" class="verdict-value">-</div><div id="risk" class="risk">-</div><div class="gauge"><div id="gauge-fill"></div></div><div id="probability">0% DGA probability</div><div class="label family-label">FAMILY CLASSIFIER</div><div id="family-name" class="family-name">-</div><div id="family-score" class="muted"></div></article>
+				<article><div class="label">MODEL-SLOT SCORES</div><div id="votes" class="votes"></div><div class="label why-label">LEXICAL DIAGNOSTICS</div><div id="features" class="features"></div></article>
+			</div>
+			<section id="xai-panel" class="xai-panel hidden"><div class="section-heading"><div><div class="label">LOCAL EXPLANATION</div><h2>What moved the LR score?</h2></div><span id="xai-model" class="muted"></span></div><div id="xai-attributions" class="contributions"></div><p id="xai-note" class="note"></p></section>
+			<div id="history" class="history"></div>
+		</section>
+
+		<section id="batch" class="panel" role="tabpanel"><div class="eyebrow">02 / BATCH SCAN</div><h2>Scan a list</h2><textarea id="batch-input" placeholder="one domain per line"></textarea><button id="batch-run" class="primary">Scan list</button><div id="batch-summary"></div><div id="batch-table"></div></section>
+
+		<section id="explorer" class="panel" role="tabpanel"><div class="eyebrow">03 / CHARACTER PROJECTION</div><h2>3D Threat Explorer</h2><p class="lede">The projection is a teaching aid: nearby points share character patterns, not necessarily infrastructure.</p><div id="scene" class="scene"><div class="scene-note">3D points load from the training artifact.</div></div></section>
+
+		<section id="lab" class="panel" role="tabpanel"><div class="eyebrow">04 / CNS INTERNALS</div><h2>Rebuild the same list</h2><div class="controls"><label>Algorithm<select id="algorithm"><option value="lcg">LCG PRNG</option><option value="md5">Date-seeded MD5</option><option value="dictionary">Dictionary concatenation</option></select></label><label>Seed<input id="seed" type="number" value="42"></label><label>Date<input id="date" value="2026-01-01"></label><label>Count<input id="count" type="number" value="12" min="1" max="100"></label></div><button id="generate" class="primary">Generate domains</button><div id="formula" class="formula"></div><div id="generated" class="generated"></div></section>
+
+		<section id="adversarial" class="panel" role="tabpanel">
+			<div class="eyebrow">05 / ROBUSTNESS EXPERIMENT</div><h2>Adversarial DGA Lab</h2>
+			<div class="controls adversarial-controls">
+				<label>Starting domain<input id="adv-domain" value="qzv8xk2m1p9r.com"></label>
+				<label>Label length <output id="adv-length-value">18</output><input id="adv-length" type="range" min="1" max="63" value="18"></label>
+				<label>Character randomness <output id="adv-randomness-value">0.70</output><input id="adv-randomness" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+				<label>Digit ratio <output id="adv-digit-value">0.15</output><input id="adv-digit" type="range" min="0" max="0.8" step="0.05" value="0.15"></label>
+				<label>Vowel ratio <output id="adv-vowel-value">0.30</output><input id="adv-vowel" type="range" min="0" max="1" step="0.05" value="0.3"></label>
+				<label>Meaningful word<input id="adv-word" value="" maxlength="32" placeholder="optional letters only"></label>
+			</div>
+			<button id="adv-run" class="primary">Mutate and score</button><div id="adv-status" class="status"></div>
+			<div id="adv-output" class="hidden"><div id="adv-summary" class="metric-grid"></div><div id="adv-comparison"></div><div id="adv-features"></div></div>
+		</section>
+
+		<section id="simulation" class="panel" role="tabpanel">
+			<div class="eyebrow">06 / CONTROLLED DETECTION RUN</div><h2>Attack vs Defense</h2>
+			<p class="lede">Generate deterministic DGA samples and benign controls locally, then score both sets.</p>
+			<div class="controls"><label>Generator<select id="sim-algorithm"><option value="lcg">LCG PRNG</option><option value="md5">Date-seeded MD5</option><option value="dictionary">Dictionary concatenation</option></select></label><label>Seed<input id="sim-seed" type="number" value="42"></label><label>Date<input id="sim-date" value="2026-01-01"></label><label>DGA domains<input id="sim-count" type="number" value="20" min="1" max="200"></label><label>Benign controls<input id="sim-benign" type="number" value="20" min="1" max="200"></label></div>
+			<button id="sim-run" class="primary">Run simulation</button><div id="sim-status" class="status"></div><div id="sim-output" class="hidden"><div id="sim-summary" class="metric-grid"></div><div id="sim-results"></div></div>
+		</section>
+
+		<section id="results" class="panel" role="tabpanel">
+			<div class="eyebrow">07 / EVIDENCE</div><h2>Model and generalization results</h2>
+			<div id="results-content" class="results-content"><p>Loading model results...</p></div>
+			<div class="section-heading unseen-heading"><div><div class="label">FAMILY-DISJOINT TEST</div><h2>Known vs unseen families</h2></div><button id="unseen-run" class="primary">Run evaluation</button></div>
+			<p class="lede">Each held-out family is excluded from training. Known scores use an internal random split of the remaining training families.</p>
+			<div id="unseen-status" class="status"></div><div id="unseen-output" class="hidden"><div id="unseen-summary" class="metric-grid"></div><div id="unseen-table"></div><p id="unseen-note" class="note"></p></div>
+		</section>
+	</main>
+	<footer>Educational research prototype; not a production security control. <span id="health">API status: checking</span></footer>
+	<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
