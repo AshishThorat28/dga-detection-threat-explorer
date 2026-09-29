@@ -1,0 +1,25 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local notebooks and editor state
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.kilo/
+
+# Generated or locally supplied data and model artifacts
+data/raw/*
+data/processed/*
+models/*
+results/*
+
+# Keep this repository free of local secrets
+.env
+.env.*
+!.env.example
