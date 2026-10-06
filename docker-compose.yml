@@ -1,0 +1,19 @@
+services:
+  api:
+    build: .
+    image: dga-threat-explorer:slim
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PORT=${PORT:-8000}
+    volumes:
+      # Persist retrained bundles / result exports on the host (optional).
+      - ./models:/app/models:ro
+      - ./results:/app/results
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped

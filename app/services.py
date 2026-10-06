@@ -13,7 +13,18 @@ history: list[dict] = []
 def load_services() -> InferenceEngine:
     global engine
     if engine is None:
-        engine = InferenceEngine(load_dataset(per_family=240))
+        artifact = ROOT / "models" / "model_bundle.joblib"
+        if artifact.is_file():
+            try:
+                engine = InferenceEngine.from_artifacts(artifact.parent)
+            except Exception:
+                # Stale or partial bundle (e.g. Keras/sklearn version drift,
+                # missing optional deps): fall back to the synthetic baseline
+                # so the API stays up. Retrain to rebuild the full bundle.
+                engine = InferenceEngine(load_dataset(per_family=240))
+                engine.training_source = "synthetic fallback (saved bundle incompatible)"
+        else:
+            engine = InferenceEngine(load_dataset(per_family=240))
     return engine
 
 def predict(domain: str) -> dict:

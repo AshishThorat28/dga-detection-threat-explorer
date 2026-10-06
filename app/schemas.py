@@ -32,3 +32,16 @@ class SimulationRequest(BaseModel):
     date: str = Field(default="2026-01-01", min_length=8, max_length=20)
     count: int = Field(default=20, ge=1, le=200)
     benign_count: int = Field(default=20, ge=1, le=200)
+
+class EvasionLoopRequest(BaseModel):
+    domains: list[str] | None = Field(default=None, min_length=1, max_length=200)
+    algorithm: str = Field(default="lcg")
+    seed: int = Field(default=42, ge=0)
+    date: str = Field(default="2026-01-01", min_length=8, max_length=20)
+    count: int = Field(default=20, ge=1, le=200)
+    rounds: int = Field(default=5, ge=1, le=10)
+    tries_per_domain: int = Field(default=12, ge=1, le=60)
+
+class EvasionRetrainRequest(BaseModel):
+    evasive_domains: list[str] = Field(min_length=1, max_length=500)
+    benign_domains: list[str] | None = Field(default=None, min_length=1, max_length=200)

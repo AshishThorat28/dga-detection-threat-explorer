@@ -1,137 +1,191 @@
-# DGA Detection and Threat Explorer
+# DGA Detection & Threat Explorer
 
-A reproducible, local-first research and teaching application for detecting domain-generation-algorithm (DGA) domains from their strings. It combines synthetic-data generation, character n-gram classifiers, lexical feature analysis, deterministic DGA demonstrations, a FastAPI service, and a browser-based threat explorer.
+A local-first, reproducible teaching and research service for **domain-string-only
+DGA screening**. It trains a 5-slot ensemble (LR, Random Forest, XGBoost,
+character-level LSTM, character-level 1D-CNN), serves it over FastAPI, and ships a
+dependency-free browser UI with detection, batch, 3D, lab, evasion-loop and
+Human-vs-AI tools.
 
-> **Research prototype:** this project is not a production detection system. Its default dataset is synthetic and has a small benign-domain vocabulary. Model scores and probabilities must not be used as operational security decisions.
+> **Research prototype — not a security control.** Default data is synthetic with a
+> tiny benign vocabulary. Scores are ranking signals, not proof of maliciousness.
+> Nothing resolves, contacts, or registers domains.
 
-## Capabilities
+## Why this model suite fits the Top-3 roadmap
 
-- Train and evaluate a deterministic baseline using a seeded synthetic dataset.
-- Score one domain or a batch, inspect lexical features, and view additive logistic-regression feature contributions alongside character n-grams.
-- Predict a supported DGA family with a separate multiclass family classifier after the binary DGA decision.
-- Run family-disjoint experiments that keep each unseen family out of training and include held-out benign controls.
-- Mutate domain length, randomness, digit/vowel ratios, and meaningful-word content, then compare original and modified scores.
-- Simulate locally generated DGA traffic against benign controls and report alerts, false positives, false negatives, detection rate, and runtime.
-- Generate example domains for supported DGA algorithms without making network requests or registering domains.
-- Inspect robustness variants and export the current in-memory scan history as CSV or JSON.
-- Explore the service from a no-build HTML, CSS, and JavaScript interface.
-- Run API and dataset-integrity tests with pytest.
+| Slot | Input | Role in the new features |
+|---|---|---|
+| `LR` | char 2–4-gram TF-IDF + 10 lexical features | Explainable baseline; logit attributions; lab refit head |
+| `RF` | same sparse matrix | Strong classical reference; fast CPU inference |
+| `XGB` | same sparse matrix | Best random-holdout F1 in `report/report.md`; hard-to-e‑vade gradient signal |
+| `LSTM` | char sequence (SLD, ≤63) | Order-sensitive view that punishes random-looking strings differently from n-grams |
+| `CNN` | char sequence (SLD, ≤63) | Local-motif view (runs, digit clusters) complementary to LSTM |
 
-## Quick Start
+The displayed **DGA score is the mean of available slot probabilities**. Diversity is
+the point: the evasion loop (#1) must fool *all* slots at once, and the Human-vs-AI
+game (#3) compares human accuracy against that same ensemble. Keeping all five is
+appropriate; dropping to classical-only would make evasion trivially easy and the
+game less informative.
 
-Requirements: Python 3.10 or newer and `pip`.
+## Architecture
 
-### Windows PowerShell
+```text
+domain string
+  → normalize + split (tldextract, offline)
+  → FeatureUnion[ char TF-IDF(2–4g, 12k) ‖ handcrafted(10) scaled ]
+  → LR / RF / XGB  ─┐
+  → char-id seq(63) → LSTM / CNN ─┤→ mean prob → verdict / risk / family / explanation
+                                  └→ LR logit attributions (exact, LR-only)
+```
+
+Service layout: `app/` (FastAPI + static ES-module UI) over `src/` (data, features,
+inference, training, evasion, game, simulation). Training writes
+`models/model_bundle.joblib` + `lstm.keras`/`cnn.keras`; the API loads the bundle
+if present, else the synthetic fallback. Stale Keras bundles are skipped slot-wise
+with a `load_warnings` field instead of crashing the service.
+
+## Quickstart
+
+Prerequisites: Python 3.10+, `pip`. No npm / frontend build.
 
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-### macOS or Linux
+Open <http://127.0.0.1:8000> (app) or <http://127.0.0.1:8000/docs> (Swagger).
+`make install run` / `make test` are equivalent shortcuts.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+### Full 5-slot training (real data)
+
+```powershell
+python -m pip install -r requirements.txt -r requirements-optional-ml.txt
+python -m src.train --dga-csv "C:\path\dataset_all.csv" --tranco-csv "C:\path\tranco.csv" --max-per-class 20000 --epochs 5
 ```
 
-Open <http://127.0.0.1:8000> for the application or <http://127.0.0.1:8000/docs> for interactive API documentation. The service is bound to loopback by default and is not exposed to the network. The default application path does not require a downloaded dataset, a prebuilt model, cloud credentials, or external network access.
+Inputs: DGA CSV with `domain,class` columns; optional headerless Tranco
+`rank,domain` for presumed-benign augmentation. The loader normalizes, drops
+cross-label SLD collisions, dedups by SLD, marks multi-family DGA SLDs
+`ambiguous`, then stratified-samples per family. Metrics + `per_family.csv` land in
+`results/`; the bundle lands in `models/`. Restart the API after training.
+Synthetic fallback: `python -m src.train` (no args, seed 42).
 
-## Training and Tests
+## Methodology
 
-Run the deterministic training/evaluation entry point to write a serialized model and result artifacts under `models/` and `results/`:
+- **Labels:** binary (benign 0 / DGA 1) + family string. Tranco = presumed benign.
+- **Split:** stratified random holdout (25%), SLD-deduped so no label crosses the
+  split. This is *not* a time-based or family-disjoint test — see `/api/experiments/unseen`
+  and the family-held-out CSV for generalization evidence.
+- **Features:** second-level-label TF-IDF + length, entropy, vowel/consonant/digit
+  ratios, hyphens, longest consonant run, unique ratio, dictionary coverage,
+  TLD length. Vectorizer is fit on train only; deep models use fixed 63-char IDs.
+- **Calibration:** none. Probabilities are uncalibrated ranking scores.
+- **Evasion lab:** bounded deterministic mutations (`src/adversarial.py`) searched in
+  `src/evasion.py`; the refit trains a fresh LR head on the *frozen* vectorizer and
+  never overwrites the saved bundle.
+- **Game:** `src/game.py` deals balanced legit/DGA rounds from local pools +
+  deterministic generators; labels are known by construction.
+- **Lookalike override:** a non-exact brand lookalike (`amozon`, `paypa1`) forces
+  verdict DGA / risk HIGH (displayed score floored at 0.85, raw DGA score kept in
+  `warnings`). An exact brand-name match (`amazon`) keeps the model verdict.
 
-```bash
-python -m src.train
-```
-
-Run the test suite from the repository root:
-
-```bash
-python -m pytest -q
-```
-
-The application builds its inference engine from synthetic data when it starts; it does not load `models/char_models.joblib`. The training command is therefore useful for reproducible evaluation and artifact generation, but is not required before launching the API. Generated models, datasets, caches, and result files are intentionally excluded from version control.
-
-## Model Scope and Interpretation
-
-The default data generator creates eight synthetic DGA-like families and a small list of benign domains using seed `42`. Domain strings are normalized and deduplicated before training. The primary text representation is character-level TF-IDF with 2- to 4-character n-grams.
-
-The current lightweight inference engine exposes five model names for comparison, but they are not five independent state-of-the-art architectures:
-
-| Slot | Current implementation |
-|---|---|
-| `LR` | Logistic regression baseline |
-| `RF` | Random forest |
-| `XGB` | Logistic regression variant; XGBoost is not currently used |
-| `LSTM` | Logistic regression variant; not an LSTM in the default path |
-| `CNN` | Logistic regression variant; not a CNN in the default path |
-
-Optional Keras model builders are provided in `src/models_deep.py`; they are not wired into the default training or serving path. Install their additional dependency with `python -m pip install -r requirements-optional-deep.txt` if you are working on those builders.
-
-The prediction explanation is an exact additive decomposition of the LR model's logit across lexical features and character n-grams. The displayed DGA probability is the mean of the model-slot probabilities, so the LR explanation does not decompose the ensemble output. Family scores are from a separate multiclass LR model and are not calibrated confidence estimates.
-
-The synthetic benchmark is deliberately easy to separate and does not represent real-world prevalence, distribution shift, calibrated probabilities, or adversarial robustness. The family-disjoint experiment removes the selected DGA family from fitting and evaluates it alongside a small held-out benign control set; because the benign vocabulary is limited, the resulting metrics are experimental demonstrations rather than strong generalization evidence. The attack/defense simulation knows its labels because it generates both classes locally. A credible operational evaluation requires independently sourced and licensed benign and malicious data, substantially broader benign controls, family-disjoint evaluation, leakage controls, calibration, and monitoring. Do not interpret a displayed score as proof that a domain is safe or malicious.
-
-## API Reference
-
-All endpoints are served from the same local FastAPI process.
+## API reference
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Service and dataset status |
-| `POST` | `/api/predict` | Analyze one domain: `{"domain":"example.com"}` |
-| `POST` | `/api/predict/batch` | Analyze a list: `{"domains":["example.com"]}` |
-| `POST` | `/api/explain` | LR logit contributions for lexical features and character n-grams |
-| `POST` | `/api/generate` | Generate and score domains for a supported algorithm |
-| `POST` | `/api/robustness` | Score simple string variants of a domain |
-| `POST` | `/api/experiments/unseen` | Run family-disjoint evaluation; accepts optional `train_families`, `unseen_families`, and `per_family` |
-| `POST` | `/api/adversarial` | Mutate a domain under bounded length/randomness/digit/vowel/word controls and compare scores |
-| `POST` | `/api/simulate` | Run a local DGA-versus-benign detection simulation |
-| `GET` | `/api/points` | Return generated 3D teaching-projection points, or an empty list if absent |
-| `GET` | `/api/results` | Return the current result summary |
-| `GET` | `/api/export?format=csv` | Export in-memory scan history as CSV; `format=json` is also supported |
+| `GET` | `/api/health` | Status, `models_loaded`, dataset stats, `load_warnings` |
+| `POST` | `/api/predict` | One domain → verdict, probability, slots, features, family, explanation |
+| `POST` | `/api/predict/batch` | ≤500 domains + summary counts |
+| `POST` | `/api/explain` | Exact LR logit attributions (not ensemble) |
+| `POST` | `/api/generate` | Deterministic LCG / MD5 / dictionary samples, scored |
+| `POST` | `/api/robustness` | Fixed string variants (append-word, hyphen, lengthen) |
+| `POST` | `/api/typosquat` | Lookalike check: exact brand hit or ≤2 edits from a known brand |
+| `POST` | `/api/adversarial` | Bounded mutation under length/randomness/digit/vowel/word controls |
+| `POST` | `/api/evasion/loop` | **#1** Attacker-vs-defender: rounds 0–N detection curve + evasive samples |
+| `POST` | `/api/evasion/retrain` | **#1** Lab refit on evasives (before/after, bundle untouched) |
+| `GET` | `/api/game/sample?count=8&seed=42` | **#3** Balanced Human-vs-AI round with truth + model answers |
+| `POST` | `/api/simulate` | Local DGA-vs-benign detection simulation |
+| `POST` | `/api/experiments/unseen` | Family-held-out evaluation (default LR) |
+| `GET` | `/api/points` | 3D teaching coordinates or `[]` |
+| `GET` | `/api/results` | Holdout metrics + message |
+| `GET` | `/api/export?fmt=csv\|json` | In-memory scan history download |
 
-Request validation and error responses are provided by FastAPI/Pydantic. Batch requests are capped at 500 domains; generated batches at 500; simulations at 200 domains per class; adversarial labels at 63 characters; and experiment datasets at 1,000 examples per family. See `/docs` for complete request and response schemas.
+UI tabs mirror the API: Detect, Batch, 3D, DGA lab, Experiments, Mutation,
+Simulation, **Evasion loop**, **Human vs AI**, Results. Keys `1–9` switch tabs.
 
-## Repository Layout
+## Repository layout
 
 ```text
-app/                 FastAPI application and static browser interface
-src/                 Data generation, features, DGA algorithms, inference, training
-tests/               API and dataset-integrity tests
-notebooks/            Colab-compatible exploratory notebook
-report/               Project report and methodology notes
-requirements.txt      Default runtime and test dependencies
-requirements-optional-deep.txt  Optional TensorFlow dependency set
+app/                  FastAPI (main.py, schemas.py, services.py) + static UI
+app/static/js/        router, api, pages + detect/batch/evasion/game/simulation/…
+src/                  data, features, dga_internals, inference, character_models,
+                      adversarial, evasion (#1), game (#3), simulation, experiments, train
+tests/                API + leakage/bundle round-trip tests
+data/{raw,processed}/ local datasets (git-kept dirs, ignored contents)
+models/               model_bundle.joblib + *.keras (local only, ignored)
+results/              metrics.csv, per_family.csv, points3d.json (local only, ignored)
+report/               full write-up + real-data metrics table
+notebooks/            2-cell Colab pointer (uses src.train)
+Dockerfile            slim CPU runtime (synthetic fallback, no TF/XGB)
+docker-compose.yml    local run with optional model/result mounts
+Makefile              install / run / train / test / docker shortcuts
 ```
 
-`data/`, `models/`, and `results/` are runtime artifact locations. Their generated or locally supplied contents are not required in the public source repository.
+Removed as dead weight: `src/models_classical.py`, `src/models_deep.py`
+(re-export shims), `src/evaluate.py`, `src/export_3d.py` (duplicated `train.py`),
+`requirements-optional-deep.txt` (folded into `requirements-optional-ml.txt`),
+`models/char_models.joblib` (unreferenced artifact).
 
-## Privacy and Safety
+## Docker (fastest, low-power)
 
-- The shipped code does not submit domains to a third-party analysis service.
-- DGA examples are generated locally; the generators do not resolve, contact, or register domains.
-- API scan history is held in process memory and is reset when the service restarts.
-- Keep the service bound to localhost unless you have added appropriate authentication, network controls, and deployment hardening.
-- Treat submitted domains and exported scan history according to your organization's data-handling requirements.
+The image is intentionally **slim**: Python 3.11-slim, base requirements only, no
+model files baked in — it boots on the synthetic LR+RF fallback in seconds with
+~200–400 MB RAM. No GPU, no TensorFlow download.
 
-## Limitations
+```bash
+docker build -t dga-threat-explorer:slim .
+docker run --rm -p 8000:8000 dga-threat-explorer:slim
+# or
+docker compose up --build
+```
 
-- Synthetic training data and limited benign coverage are not substitutes for representative labeled telemetry.
-- Model probabilities are not calibrated confidence estimates.
-- LR feature attributions explain that model's logit, not the ensemble decision, and are not causal explanations.
-- Family classifier scores and adversarial deltas are uncalibrated model outputs; the synthetic simulation is not live-traffic evidence.
-- 3D coordinates are a deterministic character projection, not a semantic embedding.
-- Optional Keras builders are not integrated into the default pipeline; the displayed `LSTM` and `CNN` slots are lightweight sklearn models.
-- No unseen-family, production, or real-world performance claim is made.
+Full ensemble inside Docker: install the ML bundle at build/run time and retrain
+with your CSVs mounted, or train on the host and mount `./models` read-only
+(compose already mounts it). If a mounted bundle was built with an older Keras,
+its sequence slots are skipped with a warning instead of crashing.
+
+## Testing & verification
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+Covers health, predict/batch/explain/generate/robustness, adversarial,
+simulation, unseen-family, **evasion loop + refit**, and **game sampling**, plus
+SLD-dedup/leakage, TLD-invariance, encoder shape, and bundle round-trip tests.
+`GET /api/export` uses `?fmt=` (the legacy `?format=` is ignored and defaults to CSV).
+
+## Limitations & safety
+
+- Synthetic fallback has 12 unique benign domains — holdout scores are unstable demos.
+- Real-data path is a random holdout, not time-aware; Tranco ≠ proven benign; source
+  CSV may be dated (see its GPL-2.0 provenance in `report/`).
+- No calibration, no adversarial training in shipped weights, 3D = character
+  projection (not embeddings), family scores are approximate.
+- Evasion tooling is framed and rate-limited as a **defensive robustness test on your
+  own local model** (≤200 domains, ≤10 rounds, ≤60 tries). Do not point it at real
+  infrastructure.
+
+## Roadmap
+
+Shipped here: **#1 attacker-vs-defender loop** and **#3 Human-vs-AI**, both
+model-agnostic across the 5-slot ensemble. Deferred to next: **#2 host-level
+infection detector** (burst/NXDomain per-host scoring over simulated DNS logs) —
+the most realistic SOC view, estimated ~2 days.
 
 ## License
 
-No license has been added to this repository. Until a license is selected and included, standard copyright applies and reuse permissions are not granted.
+No license selected yet — standard copyright applies until one is added.

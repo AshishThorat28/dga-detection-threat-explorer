@@ -2,7 +2,7 @@
 
 ## Abstract
 
-This project implements a domain-string-only detector for domain generation algorithms (DGAs). It combines character n-gram TF-IDF models, hand-crafted lexical features, deterministic DGA generators, a FastAPI service, and a browser interface for interactive inspection. A reproducible local fallback run generated 7,984 cleaned domains with seed 42. The best executed local model slot achieved 99.85% accuracy, 99.92% F1, and 92.01% ROC-AUC on its held-out split. Because the fallback benign set is compact and synthetic, these values are educational rather than production estimates.
+This project implements a domain-string-only detector for domain generation algorithms (DGAs). It combines character n-gram TF-IDF models, hand-crafted lexical features, deterministic DGA generators, a FastAPI service, and a browser interface for interactive inspection. The local fallback creates 7,984 cleaned domains, but only 12 are unique benign domains. Its stratified random holdout therefore contains only 3 benign examples, making conventional scores unstable and unsuitable as performance evidence.
 
 ## I. Introduction
 
@@ -14,7 +14,7 @@ Woodbridge et al. described LSTM-based prediction of DGAs from domain strings. T
 
 ## III. Method
 
-The local fallback uses eight labeled families: random, hexadecimal, LCG, date-seeded MD5, suffix, and three dictionary/word-like forms. Domains are lowercased, normalized, deduplicated, and split into SLD and TLD fields. Features include length, Shannon entropy, vowel and consonant ratios, digit ratio, hyphen count, consonant runs, unique-character ratio, dictionary coverage, and TLD length. The primary classifier uses character 2-4 gram TF-IDF. Logistic regression, random forest, and three independently seeded char-model slots are exposed through one shared inference pipeline.
+The no-argument fallback uses eight synthetic DGA-like families. The optional real-data training path reads `domain,class` rows from the family-labeled dataset and can add presumed-benign domains from a Tranco `rank,domain` list. Domains are normalized, cross-label registrable-label collisions are excluded, and each remaining registrable label is held to one split; DGA labels shared by multiple source families are marked `ambiguous`. The feature vectorizer is fit on training data only. The model suite includes logistic regression and random forest on character n-gram TF-IDF plus lexical features, XGBoost on the same feature matrix, and character-embedding LSTM and 1D-CNN models. The two Keras models are trained on fixed-length character sequences.
 
 The LCG generator follows $x_{n+1}=(a x_n+c)\bmod m$. The date-seeded MD5 generator demonstrates how two parties can independently create the same candidate list. The dictionary generator concatenates ordinary words to show why dictionary DGAs can be less visibly random. No generator performs networking or registration.
 
@@ -22,25 +22,25 @@ The application has endpoints for prediction, batch scanning, occlusion explanat
 
 ## IV. Results
 
-The executed command `python -m src.train` trained 5 model slots on 7,984 domains. Every slot printed the same held-out metrics because the compact implementation intentionally uses closely related character representations:
+The current `results/metrics.csv` reports a real-data random holdout after deduplication and a 20,000-per-class sampling cap. The fitted frame contains 38,500 domains: 20,000 presumed-benign rows, 18,500 DGA rows across eight families, with 9,625 held out (5,000 benign and 4,625 DGA). The metrics are not family-disjoint and should not be read as unseen-family performance.
 
 | Model | Accuracy | Precision | Recall | F1 | ROC-AUC |
 |---|---:|---:|---:|---:|---:|
-| LR | 0.9985 | 0.9985 | 1.0000 | 0.9992 | 0.9201 |
-| RF | 0.9985 | 0.9985 | 1.0000 | 0.9992 | 0.9201 |
-| XGB slot | 0.9985 | 0.9985 | 1.0000 | 0.9992 | 0.9201 |
-| LSTM slot | 0.9985 | 0.9985 | 1.0000 | 0.9992 | 0.9201 |
-| CNN slot | 0.9985 | 0.9985 | 1.0000 | 0.9992 | 0.9201 |
+| LR | 0.9346 | 0.9426 | 0.9200 | 0.9312 | 0.9815 |
+| RF | 0.8974 | 0.9288 | 0.8517 | 0.8886 | 0.9656 |
+| XGB | 0.9471 | 0.9537 | 0.9354 | 0.9444 | 0.9872 |
+| LSTM | 0.8801 | 0.9026 | 0.8413 | 0.8709 | 0.9489 |
+| CNN | 0.8619 | 0.8700 | 0.8378 | 0.8536 | 0.9365 |
 
-The score is inflated by the small benign vocabulary and synthetic construction. A genuine unseen-family experiment requires a larger independently sourced corpus and is therefore not reported as if it had been run. This is the correct interpretation: the pipeline and API are present, but generalization evidence remains a follow-up experiment.
+The family-held-out CSV is empty because real-data training does not yet run a family-disjoint evaluation. The previous synthetic experiment used only six benign controls against about 100 DGA samples per scenario; those scores were not real-corpus results and have been removed from that output.
 
 ## V. Limitations
 
-The fallback does not replace Tranco or Bambenek feeds. The benign assumption is imperfect even for Tranco. The compact run has limited benign diversity, no adversarial training, no age-aware split, and no claim of calibrated real-world risk. The deep builders are supplied as optional Keras components, while the default local path avoids forcing a multi-gigabyte TensorFlow install.
+The Tranco popularity ranking does not prove that a domain is benign, and the family-labeled repository data may be dated. Its stated GPL-2.0 license should be reviewed before redistribution. The fallback has only 12 unique benign domains; the external-data path uses a random rather than age-aware or family-disjoint holdout. Neither path includes adversarial training or probability calibration, and neither supports production-risk claims. XGBoost and TensorFlow remain optional dependencies.
 
 ## VI. Conclusion and Future Work
 
-The project provides a runnable teaching system that connects PRNG/hash internals to machine-learning decisions. The next high-value extension is to download and verify a real Tranco snapshot and a family-labeled DGA corpus, then run strict leave-one-family-out evaluation with actual Keras LSTM/CNN models. Those results should replace the fallback table only after execution.
+The project provides a runnable teaching system that connects PRNG/hash internals to machine-learning decisions and can train real XGBoost, character-level LSTM, and 1D-CNN classifiers alongside the random forest. The next high-value extension is strict time-aware and leave-one-family-out evaluation; the random-holdout metrics alone are not evidence of unseen-family generalization.
 
 ## References
 

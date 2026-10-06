@@ -13,11 +13,16 @@ __pycache__/
 .idea/
 .kilo/
 
-# Generated or locally supplied data and model artifacts
+# Generated or locally supplied data and model artifacts (keep directory scaffolding)
 data/raw/*
 data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
 models/*
+!models/.gitkeep
 results/*
+!results/.gitkeep
+results/figures/*
 
 # Keep this repository free of local secrets
 .env

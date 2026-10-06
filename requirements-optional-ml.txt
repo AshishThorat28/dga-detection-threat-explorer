@@ -1,0 +1,6 @@
+# Optional ML bundle: XGBoost + TensorFlow (character-level LSTM and 1D-CNN).
+# Install alongside requirements.txt to train and serve the full 5-slot ensemble:
+#   pip install -r requirements.txt -r requirements-optional-ml.txt
+# The base API runs without these (LR + RF on synthetic fallback).
+xgboost==3.1.2
+tensorflow==2.20.0

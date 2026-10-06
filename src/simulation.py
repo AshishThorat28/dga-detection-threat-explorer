@@ -4,9 +4,14 @@ from __future__ import annotations
 import random
 from time import perf_counter
 
-from .data import BENIGN
 from .dga_internals import generate
 from .inference import InferenceEngine
+
+SIMULATION_CONTROLS = [
+    "amazon.com", "netflix.com", "reddit.com", "adobe.com", "spotify.com",
+    "dropbox.com", "salesforce.com", "zoom.us", "ikea.com", "nasa.gov",
+    "bbc.com", "nytimes.com",
+]
 
 
 def run_simulation(
@@ -19,7 +24,7 @@ def run_simulation(
 ) -> dict:
     started = perf_counter()
     generated = generate(algorithm, seed, day, count)
-    controls = random.Random(seed).choices(BENIGN, k=benign_count)
+    controls = random.Random(seed).choices(SIMULATION_CONTROLS, k=benign_count)
     rows = []
     for domain in generated:
         prediction = engine.predict(domain, include_explanation=False)
@@ -42,5 +47,5 @@ def run_simulation(
         "processing_ms": round((perf_counter() - started) * 1000, 2),
         "alerts": [row for row in rows if row["alert"]],
         "results": rows,
-        "note": "Ground truth is known because this simulation creates the DGA samples and benign controls locally. It is not a real-traffic performance estimate.",
+        "note": "The benign controls are held out from training, but the set is small and repeated when benign_count exceeds its size. Ground truth is known because samples are selected or generated locally; this is not a real-traffic performance estimate.",
     }

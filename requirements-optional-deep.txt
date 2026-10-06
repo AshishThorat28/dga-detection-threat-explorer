@@ -1,3 +1,0 @@
-# Optional dependency for the standalone Keras builders in src/models_deep.py.
-# It is not used by the default training or API path.
-tensorflow==2.18.0
